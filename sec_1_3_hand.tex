@@ -1,0 +1,60 @@
+% ===================== Section 1.3 : Hand Analysis =====================
+
+\section{Hand Analysis (1.3)}
+
+\subsection{FO4 delay of this library}
+
+FO4 = delay of an inverter driving four copies of itself. Using \texttt{INVX8}
+($C_{in} = 2.892$\,fF, load $4C_{in} = 11.57$\,fF, input slew 30\,ps) in the slow library:
+rise 39.2\,ps, fall 46.2\,ps, so
+\[
+t_{FO4} = (39.2 + 46.2)/2 \approx 43\ \text{ps}.
+\]
+(\texttt{INVX1} is not used: $4C_{in}$ falls below the smallest load in its table.)
+\todo{read $C_{in}$ and the rise/fall tables in the .lib and confirm these values}
+
+For scale: clk$\rightarrow$Q (271\,ps) $\approx$ 6 FO4, setup (215\,ps) $\approx$ 5 FO4,
+one full adder \texttt{ADDFHX} on the critical path (350--380\,ps) $\approx$ 8--9 FO4.
+
+\subsection{Multiply-add delay in FO4 (1.3a)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lp{8.5cm}r}
+\toprule
+Block & Structure & Estimate (FO4) \\
+\midrule
+8$\times$8 multiplier & partial products (2) + 4 full-adder levels, 8$\rightarrow$2 rows ($4\times8$) + 16-bit carry (12) & 46 \\
+Sum of 8 products     & 4 full-adder levels, 8$\rightarrow$2 operands ($4\times8$) + 19-bit carry (16) & 48 \\
+Mask, fanout, buffers &  & 6 \\
+\midrule
+Total                 &  & $\approx$100 (range 80--120) \\
+\bottomrule
+\end{tabular}
+\caption{Hand estimate of one MAC cell's multiply-add.}
+\end{table}
+
+Genus (1.2a): combinational delay $= 4935 - 271 = 4664$\,ps $= 4664/43 \approx \mathbf{1.1\times10^2}$\,FO4,
+close to the hand estimate (about 100 FO4, 4.3\,ns).
+Genus already does better than the RTL as written: the seven chained additions become one
+carry-save tree (\texttt{csa\_tree\_ADD\_TC\_OP}). It is slower than the estimate mainly because of
+effects the estimate ignores: fanout buffers (173\,ps) and the mask AND (130\,ps) on the path.
+
+\subsection{Shortest period with the existing registers (1.3b)}
+
+If the three \texttt{sum\_out\_d0\_d*} stages were moved into the multiply-add (retiming) and split
+the logic evenly:
+\[
+T_{min} \approx \frac{4664}{3} + \underbrace{271}_{\text{clk}\rightarrow\text{Q}} + \underbrace{215}_{\text{setup}} + \underbrace{50}_{\text{uncert.}}
+\approx 1555 + 536 \approx \mathbf{2.1\ ns}.
+\]
+
+What limits it:
+\begin{itemize}
+  \item \textbf{Register overhead is fixed.} Each stage pays 536\,ps ($\approx$12 FO4) regardless of the logic.
+  \item \textbf{Cells cannot be split.} A full adder is $\approx$370\,ps, so cuts cannot land exactly at 1/3.
+  \item \textbf{Other paths take over.} Enable/control, weight-load and I/O paths become critical.
+  \item \textbf{Wider registers.} Cutting inside the arithmetic stores 8$\times$16-bit products instead of one
+        19-bit sum, adding area and power.
+\end{itemize}

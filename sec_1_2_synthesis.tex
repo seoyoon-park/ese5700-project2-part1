@@ -1,0 +1,136 @@
+% ===================== Section 1.2 : Synthesize the Baseline =====================
+
+\section{Baseline Synthesis (1.2)}
+
+Genus 23.10, slow corner (0.9\,V, 125\,$^\circ$C), \texttt{CLK\_PERIOD} = 5.2\,ns, unmodified RTL.
+Settings: \texttt{auto\_ungroup none} (keeps submodules for per-module reports),
+generic effort medium, map/opt effort high.
+
+\subsection{Area, cells and timing (1.2a)}
+
+The design maps to \textbf{14,991 cells: 1,600 flip-flops and 13,391 combinational cells},
+with \textbf{6.2$\times$10$^4$\,$\mu$m$^2$} of cell area. Setup \textbf{WNS = 0\,ps} with no violating paths.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Module & Cells & FFs & Comb. & Cell area ($\mu$m$^2$) & Share \\
+\midrule
+rt\_in          &   398 & 318 &    80 & $2.8\times10^3$ & 4.5\% \\
+active          & 1,287 & 809 &   478 & $8.4\times10^3$ & 14\%  \\
+mac\_0          & 3,310 &  60 & 3,250 & $1.2\times10^4$ & 20\%  \\
+mac\_1          & 3,191 &  60 & 3,131 & $1.2\times10^4$ & 19\%  \\
+mac\_2          & 3,418 &  60 & 3,358 & $1.3\times10^4$ & 21\%  \\
+mac\_3          & 3,104 &  60 & 3,044 & $1.2\times10^4$ & 19\%  \\
+rt\_out         &   208 & 183 &    25 & $1.6\times10^3$ & 2.6\% \\
+core local      &    43 &  20 &    23 & $2.7\times10^2$ & 0.44\% \\
+cmac\_top local &    32 &  30 &     2 & $2.5\times10^2$ & 0.41\% \\
+\midrule
+Total           & 14,991 & 1,600 & 13,391 & $6.2\times10^4$ & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{Baseline area by submodule (\texttt{syn\_area.rpt}, \texttt{syn\_qor.rpt}).
+``Local'' rows are the parent total minus its children.}
+\end{table}
+
+The four MAC cells take \textbf{79\%} of the area, almost all of it arithmetic (60 FFs each).
+The four MAC copies differ in size because Genus uniquifies and optimizes each instance separately.
+
+\textbf{Critical path.}
+\texttt{u\_core/u\_active/dat\_actv\_data\_reg0\_reg[57]/CK} $\rightarrow$
+\texttt{u\_core/u\_mac\_3/sum\_out\_d0\_d1\_reg[13]/D}, \textbf{39 logic levels}.
+\begin{verbatim}
+Path 1: MET (0 ps) Setup Check
+   Setup:-     215
+   Uncertainty:-  50
+   Required Time:= 4935
+   Data Path:-  4935
+   Slack:=         0
+\end{verbatim}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llr}
+\toprule
+Segment & Cells on the path & Delay (ps) \\
+\midrule
+Launch (clk$\rightarrow$Q)   & \texttt{MDFFHQX4}                         & 271  \\
+Fanout buffering             & \texttt{fopt*} inverters                  & 173  \\
+8$\times$8 multiplier        & \texttt{mul\_*}, full adders \texttt{ADDFHX} & 1,481 \\
+Mask AND                     & \texttt{CLKAND2X6}                        & 130  \\
+Adder tree + final carry     & \texttt{csa\_tree\_ADD\_TC\_OP\_*}, NOR chain, XOR & 2,880 \\
+\midrule
+Arrival                      &                                           & 4,935 \\
+\bottomrule
+\end{tabular}
+\caption{Critical path by segment (\texttt{syn\_timing.rpt}).}
+\end{table}
+
+The whole multiply-add sits in one stage, as predicted in 1.1c. The fanout buffers appear because
+Genus merged the four \texttt{dat\_actv\_data\_reg} copies (1.1b), so one register now drives all four MACs.
+
+\subsection{Power on the workload (1.2b)}
+
+After \texttt{make vcd}, Genus reads the power workload (\texttt{tb\_cmac/dut}).
+Total power is \textbf{5.9\,mW}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Category & Internal (mW) & Switching (mW) & Total (mW) & Share \\
+\midrule
+Registers           & 0.85 & 0.21 & 1.1 & 18\% \\
+Combinational logic & 1.8  & 3.0  & 4.9 & 82\% \\
+Clock network       & 0    & 0    & 0   & 0\%  \\
+Leakage (all cells) & \multicolumn{2}{c}{---} & $2.1\times10^{-3}$ & 0.04\% \\
+\midrule
+Total               & 2.7  & 3.2  & 5.9 & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{Power by category (\texttt{syn\_power.rpt}).}
+\end{table}
+
+\textbf{Clock network = 0} because no clock tree exists before CTS (ideal clock).
+The power of the 1,600 flip-flop clock pins is counted inside the register internal power.
+\todo{split clock-pin power out with \texttt{report\_power -by\_category} option used in Codex run}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Module & Internal (mW) & Switching (mW) & Total (mW) & Share \\
+\midrule
+mac\_0 -- mac\_3 (sum)       & 2.0  & 3.0  & 4.9  & 84\% \\
+\quad largest: mac\_2        & 0.51 & 0.78 & 1.3  & 22\% \\
+active                       & 0.40 & 0.12 & 0.52 & 8.8\% \\
+rt\_in                       & 0.17 & 0.047 & 0.22 & 3.7\% \\
+rt\_out                      & 0.12 & 0.049 & 0.17 & 2.8\% \\
+core + top local             & --   & --   & 0.068 & 1.1\% \\
+\midrule
+Total                        & 2.7  & 3.2  & 5.9  & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{Power by submodule (\texttt{syn\_power\_hier.rpt}).}
+\end{table}
+
+\textbf{Most power: the MAC cells (84\%; mac\_2 alone 1.3\,mW).} It is mainly \emph{switching}
+power: every data beat re-evaluates the partial products and the adder tree.
+The register-only modules (active, rt\_in, rt\_out) show the opposite pattern: internal power is
+about 3$\times$ their switching power, mostly flip-flops being clocked every cycle even when their
+enables are off. This points to operand isolation / arithmetic changes for the MACs and
+clock gating / trimming for the registers.
+
+\textbf{Baseline estimate.}
+$A = 6.2\times10^4/0.7 = 8.9\times10^4\,\mu$m$^2$,
+$E_{MAC} = 5.9 \times 5.2 / 32 = 0.96$\,pJ,
+$\mathrm{FOM}_{syn} = 8.9\times10^4 \times 0.96 \times 5.2 = \mathbf{4.4\times10^5}\,\mu$m$^2\cdot$pJ$\cdot$ns.
+
+\subsection{Period sweep (1.2c)}
+
+\todo{synthesize at $\geq$4 periods (e.g.\ 4.5, 5.2, 6.5, 8.0\,ns), plot area and power vs.\ period, explain the shape}
